@@ -85,6 +85,14 @@ if __name__ == '__main__':
     
     chart.set(df_1m)
     
+    # Enable legend to show OHLC and returns on hover
+    chart.legend(
+        visible=True,
+        ohlc=True,  # Show Open, High, Low, Close
+        percent=True,  # Show percentage change
+        color_based_on_candle=True  # Color changes based on candle direction
+    )
+    
     # Create subchart for 1-second candles (bottom)
     # No sync parameter means independent scrolling
     subchart = chart.create_subchart(
@@ -105,6 +113,14 @@ if __name__ == '__main__':
     print(f"Date range: {df_1s['time'].min()} to {df_1s['time'].max()}")
     
     subchart.set(df_1s)
+    
+    # Enable legend for 1s candles too
+    subchart.legend(
+        visible=True,
+        ohlc=True,  # Show Open, High, Low, Close
+        percent=True,  # Show percentage change
+        color_based_on_candle=True  # Color changes based on candle direction
+    )
     
     # Configure time scale to show seconds for 1s candles
     subchart.time_scale(
