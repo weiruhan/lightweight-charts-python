@@ -83,7 +83,67 @@ if __name__ == '__main__':
     print(f"Date range: {df_1m['time'].min()} to {df_1m['time'].max()}")
     print(f"Price range: ${df_1m['low'].min():.2f} - ${df_1m['high'].max():.2f}")
     
+    # Load fill history (trades)
+    fills = pd.read_csv("./fill_historys.csv")
+    fills['time'] = pd.to_datetime(fills['ts'], unit='ms')
+    # Ensure timezone-naive
+    if fills['time'].dt.tz is not None:
+        fills['time'] = fills['time'].dt.tz_localize(None)
+    
+    # Filter fills for the date range
+    start_time = df_1m['time'].min()
+    end_time = df_1m['time'].max()
+    fills_filtered = fills[(fills['time'] >= start_time) & (fills['time'] <= end_time)]
+    
+    print(f"\nLoaded {len(fills_filtered)} trades in date range")
+    
     chart.set(df_1m)
+    
+    # Add trade markers to 1-minute chart
+    for _, trade in fills_filtered.iterrows():
+        # Entry trades (opening positions)
+        if trade['role'] == 'open':
+            if trade['side'] == 'BUY':
+                # Long entry - green arrow up below the candle
+                chart.marker(
+                    time=trade['time'],
+                    position='below',
+                    shape='arrow_up',
+                    color='#26a69a',  # Green
+                    text=f"LONG {trade['qty']:.2f}@{trade['price']:.1f}"
+                )
+            else:  # SELL
+                # Short entry - red arrow down above the candle
+                chart.marker(
+                    time=trade['time'],
+                    position='above',
+                    shape='arrow_down',
+                    color='#ef5350',  # Red
+                    text=f"SHORT {trade['qty']:.2f}@{trade['price']:.1f}"
+                )
+        
+        # Exit trades (closing positions)
+        else:  # role == 'close'
+            if trade['side'] == 'SELL':
+                # Closing long position - circle above
+                chart.marker(
+                    time=trade['time'],
+                    position='above',
+                    shape='circle',
+                    color='#4caf50',  # Light green
+                    text=f"EXIT {trade['tag']} {trade['qty']:.2f}@{trade['price']:.1f}"
+                )
+            else:  # BUY
+                # Closing short position - circle below
+                chart.marker(
+                    time=trade['time'],
+                    position='below',
+                    shape='circle',
+                    color='#ff5252',  # Light red
+                    text=f"EXIT {trade['tag']} {trade['qty']:.2f}@{trade['price']:.1f}"
+                )
+    
+    print(f"Added {len(fills_filtered)} trade markers to 1-minute chart")
     
     # Enable legend to show OHLC and returns on hover
     chart.legend(
@@ -113,6 +173,48 @@ if __name__ == '__main__':
     print(f"Date range: {df_1s['time'].min()} to {df_1s['time'].max()}")
     
     subchart.set(df_1s)
+    
+    # Add trade markers to 1-second chart (same trades, different timeframe view)
+    for _, trade in fills_filtered.iterrows():
+        # Entry trades (opening positions)
+        if trade['role'] == 'open':
+            if trade['side'] == 'BUY':
+                subchart.marker(
+                    time=trade['time'],
+                    position='below',
+                    shape='arrow_up',
+                    color='#26a69a',
+                    text=f"LONG {trade['qty']:.2f}@{trade['price']:.1f}"
+                )
+            else:  # SELL
+                subchart.marker(
+                    time=trade['time'],
+                    position='above',
+                    shape='arrow_down',
+                    color='#ef5350',
+                    text=f"SHORT {trade['qty']:.2f}@{trade['price']:.1f}"
+                )
+        
+        # Exit trades (closing positions)
+        else:  # role == 'close'
+            if trade['side'] == 'SELL':
+                subchart.marker(
+                    time=trade['time'],
+                    position='above',
+                    shape='circle',
+                    color='#4caf50',
+                    text=f"EXIT {trade['tag']} {trade['qty']:.2f}@{trade['price']:.1f}"
+                )
+            else:  # BUY
+                subchart.marker(
+                    time=trade['time'],
+                    position='below',
+                    shape='circle',
+                    color='#ff5252',
+                    text=f"EXIT {trade['tag']} {trade['qty']:.2f}@{trade['price']:.1f}"
+                )
+    
+    print(f"Added {len(fills_filtered)} trade markers to 1-second chart")
     
     # Enable legend for 1s candles too
     subchart.legend(
