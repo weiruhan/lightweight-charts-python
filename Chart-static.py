@@ -106,6 +106,12 @@ if __name__ == '__main__':
     
     subchart.set(df_1s)
     
+    # Configure time scale to show seconds for 1s candles
+    subchart.time_scale(
+        time_visible=True,
+        seconds_visible=True  # This enables seconds display
+    )
+    
     print("\n✅ Chart ready! Top: 1-minute candles | Bottom: 1-second candles")
     
     chart.show(block=True)
