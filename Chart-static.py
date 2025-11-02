@@ -86,11 +86,11 @@ if __name__ == '__main__':
     chart.set(df_1m)
     
     # Create subchart for 1-second candles (bottom)
+    # No sync parameter means independent scrolling
     subchart = chart.create_subchart(
         position='bottom',
         width=1.0,
-        height=0.4,  # Takes 40% of the window height
-        sync=True  # Sync with the main chart (True syncs with parent)
+        height=0.4  # Takes 40% of the window height
     )
     
     # Load 1-second candle data
