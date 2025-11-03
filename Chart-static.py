@@ -2,6 +2,23 @@ import pandas as pd
 from lightweight_charts import Chart
 from datetime import datetime, timedelta
 import os
+import sys
+import warnings
+import contextlib
+
+# Suppress pywebview cleanup warnings
+warnings.filterwarnings('ignore')
+
+@contextlib.contextmanager
+def suppress_stderr():
+    """Temporarily suppress stderr to hide pywebview cleanup errors"""
+    old_stderr = sys.stderr
+    sys.stderr = open(os.devnull, 'w')
+    try:
+        yield
+    finally:
+        sys.stderr.close()
+        sys.stderr = old_stderr
 
 
 def load_date_range(start_date, end_date, data_dir='./Data/Storage/BTCUSDTSWAP_candle1m/', timeframe='1m'):
@@ -232,4 +249,13 @@ if __name__ == '__main__':
     
     print("\n✅ Chart ready! Top: 1-minute candles | Bottom: 1-second candles")
     
-    chart.show(block=True)
+    # Show chart and suppress cleanup errors when closing
+    with suppress_stderr():
+        try:
+            chart.show(block=True)
+        finally:
+            # Quick exit to avoid file cleanup warnings
+            pass
+    
+    # Exit cleanly
+    sys.exit(0)
