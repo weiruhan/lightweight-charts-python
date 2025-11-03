@@ -247,7 +247,7 @@ if __name__ == '__main__':
         seconds_visible=True  # This enables seconds display
     )
     
-    print("\n✅ Chart ready! Top: 1-minute candles | Bottom: 1-second candles")
+    print("\n Chart ready! Top: 1-minute candles | Bottom: 1-second candles")
     
     # Show chart and suppress cleanup errors when closing
     with suppress_stderr():
