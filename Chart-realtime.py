@@ -1,9 +1,11 @@
 import pandas as pd
 import numpy as np
 from lightweight_charts import Chart
+from datetime import datetime, timedelta
 from time import sleep
 import signal
 import sys
+import os
 
 
 def signal_handler(sig, frame):
@@ -17,6 +19,58 @@ def signal_handler(sig, frame):
     sys.exit(0)
 
 
+def load_date_range(start_date, end_date, data_dir='./Data/Storage/BTCUSDTSWAP_candle1m/', timeframe='1m'):
+    """
+    Load candle data for a date range.
+    
+    Args:
+        start_date: Start date as string 'YYYY-MM-DD' or datetime
+        end_date: End date as string 'YYYY-MM-DD' or datetime
+        data_dir: Directory containing the CSV files
+        timeframe: '1m' or '1s' for 1-minute or 1-second candles
+    
+    Returns:
+        List of DataFrames (one per day) for progressive loading
+    """
+    # Convert to datetime if strings
+    if isinstance(start_date, str):
+        start_date = datetime.strptime(start_date, '%Y-%m-%d')
+    if isinstance(end_date, str):
+        end_date = datetime.strptime(end_date, '%Y-%m-%d')
+    
+    # Determine column name based on timeframe
+    time_col = 'timestamp_1s' if timeframe == '1s' else 'timestamp_1m'
+    
+    dfs = []
+    current_date = start_date
+    
+    # Iterate through each day in the range
+    while current_date <= end_date:
+        date_str = current_date.strftime('%Y-%m-%d')
+        file_path = os.path.join(data_dir, f'BTC-USDT-SWAP-candle{timeframe}-{date_str}.csv')
+        
+        if os.path.exists(file_path):
+            print(f"Loading {timeframe}: {date_str}")
+            df = pd.read_csv(file_path)
+            # Clean and prepare candle data
+            df = df.drop(['volume_ccy','volCcyQuote','timestamp'], axis=1)
+            df.rename(columns={time_col: 'time'}, inplace=True)
+            df['time'] = pd.to_datetime(df['time'])
+            # Ensure timezone-naive
+            if df['time'].dt.tz is not None:
+                df['time'] = df['time'].dt.tz_localize(None)
+            dfs.append(df)
+        else:
+            print(f"Warning: File not found for {date_str}")
+        
+        current_date += timedelta(days=1)
+    
+    if not dfs:
+        raise ValueError("No data files found in the specified range")
+    
+    return dfs
+
+
 if __name__ == '__main__':
     # Register signal handler for Ctrl+C
     signal.signal(signal.SIGINT, signal_handler)
@@ -24,27 +78,30 @@ if __name__ == '__main__':
     try:
         chart = Chart(toolbox=True)  # Enable toolbox for drawing tools
         
-        # Load candle data
-        df1 = pd.read_csv("./Data/Storage/BTCUSDTSWAP_candle1m/BTC-USDT-SWAP-candle1m-2021-10-01.csv")
-        df2 = pd.read_csv("./Data/Storage/BTCUSDTSWAP_candle1m/BTC-USDT-SWAP-candle1m-2021-10-02.csv")
+        # ========== CONFIGURE DATE RANGE HERE ==========
+        START_DATE = '2021-10-01'
+        END_DATE = '2021-10-02'
+        # ===============================================
         
-        # Clean and prepare candle data
-        df1 = df1.drop(['volume_ccy','volCcyQuote','timestamp'], axis=1)
-        df1.rename(columns={"timestamp_1m": 'time'}, inplace=True)
-        df1['time'] = pd.to_datetime(df1['time'])
-        # Ensure timezone-naive
-        if df1['time'].dt.tz is not None:
-            df1['time'] = df1['time'].dt.tz_localize(None)
+        # Load candle data for date range
+        dfs = load_date_range(START_DATE, END_DATE)
         
-        df2 = df2.drop(['volume_ccy','volCcyQuote','timestamp'], axis=1)
-        df2.rename(columns={"timestamp_1m": 'time'}, inplace=True)
-        df2['time'] = pd.to_datetime(df2['time'])
-        # Ensure timezone-naive
-        if df2['time'].dt.tz is not None:
-            df2['time'] = df2['time'].dt.tz_localize(None)
+        if len(dfs) < 2:
+            print("Error: Need at least 2 days of data for live updates")
+            sys.exit(1)
         
-        # Combine both dataframes to get all trades
-        df_all = pd.concat([df1, df2], ignore_index=True)
+        # First dataframe for initial display
+        df1 = dfs[0]
+        # Remaining dataframes for live updates
+        df_remaining = pd.concat(dfs[1:], ignore_index=True)
+        
+        # Combine all for trade filtering
+        df_all = pd.concat(dfs, ignore_index=True)
+        
+        print(f"\nLoaded {len(df1)} initial candles")
+        print(f"Loaded {len(df_remaining)} candles for live updates")
+        print(f"Date range: {df_all['time'].min()} to {df_all['time'].max()}")
+        print(f"Price range: ${df_all['low'].min():.2f} - ${df_all['high'].max():.2f}")
         
         # Load fill history (trades)
         fills = pd.read_csv("./fill_historys.csv")
@@ -62,6 +119,14 @@ if __name__ == '__main__':
         
         # Set initial data
         chart.set(df1)
+        
+        # Enable legend
+        chart.legend(
+            visible=True,
+            ohlc=True,
+            percent=True,
+            color_based_on_candle=True
+        )
         
         # Add markers for all trades in df1
         df1_max_time = df1['time'].max()
@@ -111,21 +176,33 @@ if __name__ == '__main__':
                     )
         
         print(f"Added {len(fills_df1)} trade markers to chart")
-        chart.show()
+        chart.show(block=False)  # Show window but don't block yet
         
-        # Live update with df2 data (optional - you can comment this out to just see static chart)
-        print("Starting live updates with df2 data...")
-        fills_df2 = fills[fills['time'] > df1_max_time]
+        # Live update with remaining data
+        print(f"Starting live updates with {len(df_remaining)} candles...")
+        fills_remaining = fills[fills['time'] > df1_max_time]
         
-        for i, series in df2.iterrows():
-            if not chart.is_alive:
-                break
-            
-            chart.update(series)
-            
-            # Check if there's a trade at this time
-            current_time = series['time']
-            trades_at_time = fills_df2[fills_df2['time'] == current_time]
+        window_closed = False
+        for i, series in df_remaining.iterrows():
+            try:
+                if not chart.is_alive:
+                    print("Chart window closed by user.")
+                    window_closed = True
+                    break
+                
+                chart.update(series)
+                
+                # Check if there's a trade at this time
+                current_time = series['time']
+                trades_at_time = fills_remaining[fills_remaining['time'] == current_time]
+            except Exception as e:
+                # WebView2 was disposed (user closed window)
+                if "ObjectDisposedException" in str(type(e).__name__) or "disposed" in str(e).lower():
+                    print("Chart window closed by user.")
+                    window_closed = True
+                    break
+                # Re-raise other exceptions
+                raise
             
             for _, trade in trades_at_time.iterrows():
                 if trade['role'] == 'open':
@@ -165,18 +242,25 @@ if __name__ == '__main__':
                 print(f"[LIVE] {trade['role'].upper()} {trade['side']} @ {current_time}")
             
             sleep(0.05)  # Faster updates
+        
+        # After all updates, block until window is closed
+        print("\nAll data loaded. Chart will remain open until you close the window.")
+        print("(Close the window or press Ctrl+C to exit)")
+        
+        # This will block until the window is closed
+        import asyncio
+        asyncio.run(chart.show_async())
             
     except KeyboardInterrupt:
         print('\nInterrupt received, closing chart...')
     except Exception as e:
-        print(f"Error occurred: {e}")
-        import traceback
-        traceback.print_exc()
+        # Filter out ObjectDisposedException which is expected when closing
+        if "ObjectDisposedException" not in str(type(e).__name__) and "disposed" not in str(e).lower():
+            print(f"Error occurred: {e}")
+            import traceback
+            traceback.print_exc()
     finally:
-        # Ensure proper cleanup
-        if 'chart' in locals():
-            try:
-                chart.exit()
-            except Exception as e:
-                print(f"Error during cleanup: {e}")
+        # Simplified cleanup
         print("Chart closed.")
+        # Force immediate exit to avoid file cleanup issues
+        os._exit(0)
